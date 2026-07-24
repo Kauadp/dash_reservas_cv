@@ -1,0 +1,14 @@
+[theme]
+base = "light"
+primaryColor = "#E54E88"            # COLORS["primary"] — usado em botões, sliders, radio, foco de inputs
+backgroundColor = "#FFFFFF"         # COLORS["surface"]
+secondaryBackgroundColor = "#FAF7F9"  # COLORS["background"] — sidebar e cards
+textColor = "#241B22"               # COLORS["text"]
+font = "sans serif"
+
+[server]
+headless = true
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
