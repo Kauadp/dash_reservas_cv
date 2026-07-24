@@ -397,7 +397,7 @@ with tab_descontos:
             orientation="h",
             color_discrete_sequence=[COLORS["primary_dark"]],
         )
-        fig_desc_corretor.update_layout(**plotly_layout(title="Desconto Total por Corretor"))
+        fig_desc_corretor.update_layout(**plotly_layout(title="Desconto Total por Executivo"))
         fig_desc_corretor.update_yaxes(autorange="reversed", title=None)
         fig_desc_corretor.update_xaxes(title=None)
         st.plotly_chart(fig_desc_corretor, use_container_width=True)
@@ -411,7 +411,7 @@ with tab_descontos:
             ].rename(
                 columns={
                     "titular_nome": "Expositor",
-                    "corretor_nome": "Corretor",
+                    "corretor_nome": "Executivo",
                     "desconto_unidade": "Desconto (R$)",
                 }
             ),

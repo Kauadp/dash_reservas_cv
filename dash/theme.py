@@ -1,3 +1,30 @@
+"""
+theme.py — Tema visual do Exagerado - Dash Vendas
+────────────────────────────────────────────────────
+Paleta, CSS customizado, config de página e helpers de layout
+(KPI cards, template plotly, headers de seção).
+
+Uso básico no app principal:
+
+    import streamlit as st
+    from theme import PAGE_CONFIG, inject_custom_css, kpi_row, section_header, plotly_layout
+
+    st.set_page_config(**PAGE_CONFIG)
+    inject_custom_css()
+
+    section_header("🤝", "Comercial & Funil", "Visão geral do funil de vendas")
+    kpi_row([
+        {"label": "Expositores Totais", "value": "128"},
+        {"label": "TO Dentro", "value": "42"},
+        {"label": "Contratos Enviados", "value": "97"},
+        {"label": "Contratos Assinados", "value": "63"},
+        {"label": "Taxa de Conversão", "value": "64,9%", "delta": "+3,2 p.p."},
+    ])
+
+    fig.update_layout(**plotly_layout(title="Enviados vs Assinados"))
+    st.plotly_chart(fig, use_container_width=True)
+"""
+
 import streamlit as st
 
 # ──────────────────────────────────────────────────────────────────
@@ -39,7 +66,7 @@ PAGE_CONFIG = dict(
     page_title="Exagerado - Dash Vendas",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
@@ -98,11 +125,20 @@ def inject_custom_css() -> None:
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.03em;
+            white-space: normal;
         }}
         div[data-testid="stMetricValue"] {{
             color: {COLORS["text"]};
-            font-size: 28px;
+            font-size: clamp(18px, 2vw, 28px);
             font-weight: 700;
+            line-height: 1.2;
+            white-space: normal !important;
+            overflow-wrap: break-word;
+        }}
+        div[data-testid="stMetricValue"] > div {{
+            overflow: visible !important;
+            text-overflow: unset !important;
+            white-space: normal !important;
         }}
 
         /* ── Containers gerais (gráficos) ───────────────────────── */

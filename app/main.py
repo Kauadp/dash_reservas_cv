@@ -21,10 +21,46 @@ class PipelineController:
         self.headers = headers
 
     def run(self) -> bool:
-        """Executa a ETL: Extrai da API, Trata e Grava no Banco via DatabaseManager."""
+        """Executa a ETL: Extrai da API (Ativas e Vendidas), Trata e Grava no Banco."""
         print("\n🚀 [Pipeline] Iniciando atualização de reservas...")
 
-        df_dados = fetch_reservas_cvcrm(self.api_url, self.headers)
+        # 1. Parâmetros para esteira ativa / não vendidas
+        params_ativas = {
+            "faturar": "false",
+            "condicao_completa": "true",
+            "campos_adicionais_reserva_contrato": "true",
+            "pagina": 1,
+            "registros_por_pagina": 500,
+        }
+
+        # 2. Parâmetros para vendidas / integradas
+        params_vendidas = {
+            "retornar_integradas": "true",
+            "situacao": "todas",
+            "condicao_completa": "true",
+            "campos_adicionais_reserva_contrato": "true",
+            "pagina": 1,
+            "registros_por_pagina": 500,
+        }
+
+        print("🔄 [Pipeline] Buscando reservas ativas...")
+        df_ativas = fetch_reservas_cvcrm(
+            self.api_url, self.headers, params=params_ativas
+        )
+
+        print("🔄 [Pipeline] Buscando reservas vendidas...")
+        df_vendidas = fetch_reservas_cvcrm(
+            self.api_url, self.headers, params=params_vendidas
+        )
+
+        df_dados = pd.concat([df_ativas, df_vendidas], ignore_index=True)
+        df_dados = df_dados.drop_duplicates(
+            subset=["id_proposta_cv"], keep="last"
+        )
+
+        print(
+            f"📦 [Pipeline] Total consolidado sem duplicatas: {len(df_dados)} registros."
+        )
 
         sucesso = self.db_manager.salvar_reservas(df_dados)
 

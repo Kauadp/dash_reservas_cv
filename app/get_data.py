@@ -7,17 +7,11 @@ def converte_float(val):
     except (ValueError, TypeError):
         return 0.0
 
-def fetch_reservas_cvcrm(url_base: str, headers: dict) -> pd.DataFrame:
+def fetch_reservas_cvcrm(url_base: str, headers: dict, params: dict) -> pd.DataFrame:
     """
     Função para buscar reservas no CV CRM e retornar um DataFrame limpo.
     """
-    params = {
-        "faturar": "false",
-        "condicao_completa": "true",
-        "campos_adicionais_reserva_contrato": "true",
-        "pagina": 1,
-        "registros_por_pagina": 500,
-    }
+
     response = requests.get(url_base, headers=headers, params=params)
 
     if response.status_code != 200:
