@@ -2,8 +2,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import sys
+from pathlib import Path
 from geo_utils import geocodificar, obter_centro_estado
+from plotly.subplots import make_subplots
 from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO
+
+project_root = Path(__file__).resolve().parents[1]
+dash_dir = Path(__file__).resolve().parent
+for path in (str(project_root), str(dash_dir)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 from theme import (
     PAGE_CONFIG,
     COLORS,
@@ -13,15 +23,8 @@ from theme import (
     kpi_row,
     plotly_layout,
     donut_layout,
+    format_delta,
 )
-import sys
-from pathlib import Path
-
-project_root = Path(__file__).resolve().parents[1]
-dash_dir = Path(__file__).resolve().parent
-for path in (str(project_root), str(dash_dir)):
-    if path not in sys.path:
-        sys.path.insert(0, path)
 
 from app.database import DatabaseManager
 from app.main import PipelineController, url, headers
@@ -85,6 +88,38 @@ vendidos = df[(df["situacao"] == "Contrato Assinado") |
               (df["situacao"] == "Vendida")].copy()
 
 
+JANELAS_COMPARACAO = {
+    "Dia anterior (D-1)": 1,
+    "Semana anterior (D-7)": 7,
+    "Mês anterior (D-30)": 30,
+}
+janela_label = st.sidebar.selectbox(
+    "📊 Comparar KPIs com", list(JANELAS_COMPARACAO.keys()), index=1
+)
+
+comparison_days = JANELAS_COMPARACAO[janela_label]
+reference_date = pd.Timestamp.now().normalize()
+current_start = reference_date - pd.Timedelta(days=comparison_days)
+current_end = reference_date
+previous_start = reference_date - pd.Timedelta(days=2 * comparison_days)
+previous_end = reference_date - pd.Timedelta(days=comparison_days)
+
+
+def slice_period(data: pd.DataFrame, date_column: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    return data[(data[date_column] >= start) & (data[date_column] < end)].copy()
+
+
+df_current = slice_period(df, "data_cadastro", current_start, current_end)
+df_previous = slice_period(df, "data_cadastro", previous_start, previous_end)
+
+df_before_current = df[df["data_cadastro"] < current_start].copy()
+
+vendidos_current = slice_period(vendidos, "data_venda", current_start, current_end)
+vendidos_previous = slice_period(vendidos, "data_venda", previous_start, previous_end)
+
+vendidos_before_current = vendidos[vendidos["data_venda"] < current_start].copy()
+
+
 # ──────────────────────────────────────────────────────────────────
 #  ABAS
 # ──────────────────────────────────────────────────────────────────
@@ -101,24 +136,92 @@ tab_comercial, tab_receita, tab_descontos, tab_espaco = st.tabs(
 #  ABA 1 — COMERCIAL & FUNIL
 # ════════════════════════════════════════════════════════════════
 with tab_comercial:
-    section_header("🤝", "Comercial & Funil", f"Evento: {evento_selecionado}")
+    section_header(
+        "🤝",
+        "Comercial & Funil",
+        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+    )
 
     expositores_totais = df["titular_nome"].nunique()
+    expositores_totais_prev = df_before_current["titular_nome"].nunique()
+
     to_dentro = df[df["situacao"] == "Link To Dentro Recebido e Validado"]
+    to_dentro_prev = df_before_current[df_before_current["situacao"] == "Link To Dentro Recebido e Validado"]
+
     contratos_enviados = df[df["situacao"] == "Contrato Enviado"]
+    contratos_enviados_prev = df_before_current[df_before_current["situacao"] == "Contrato Enviado"]
+
     total_reservas = len(df)
+    total_reservas_prev = len(df_before_current)
+
     contratos_assinados = len(vendidos)
+    contratos_assinados_prev = len(vendidos_before_current)
+
     taxa_conversao = (contratos_assinados / total_reservas * 100) if total_reservas else 0
+    taxa_conversao_prev = (contratos_assinados_prev / total_reservas_prev * 100) if total_reservas_prev else 0
+
+    expositores_delta, expositores_delta_color = format_delta(
+        expositores_totais,
+        expositores_totais_prev,
+        higher_is_better=True,
+        abs_format="{:+,.0f}",
+    )
+    to_dentro_delta, to_dentro_delta_color = format_delta(
+        len(to_dentro),
+        len(to_dentro_prev),
+        higher_is_better=True,
+        abs_format="{:+,.0f}",
+    )
+    contratos_enviados_delta, contratos_enviados_delta_color = format_delta(
+        len(contratos_enviados),
+        len(contratos_enviados_prev),
+        higher_is_better=True,
+        abs_format="{:+,.0f}",
+    )
+    contratos_assinados_delta, contratos_assinados_delta_color = format_delta(
+        contratos_assinados,
+        contratos_assinados_prev,
+        higher_is_better=True,
+        abs_format="{:+,.0f}",
+    )
+    taxa_conversao_delta, taxa_conversao_delta_color = format_delta(
+        taxa_conversao,
+        taxa_conversao_prev,
+        higher_is_better=True,
+        abs_format="{:+.1f} pp",
+    )
 
     kpi_row(
         [
-            {"label": "Expositores Totais", "value": f"{expositores_totais}"},
-            {"label": "To Dentro", "value": f"{len(to_dentro)}"},
-            {"label": "Contratos Enviados", "value": f"{len(contratos_enviados)}"},
-            {"label": "Contratos Assinados", "value": f"{contratos_assinados}"},
+            {
+                "label": "Expositores Totais",
+                "value": f"{expositores_totais}",
+                "delta": expositores_delta,
+                "delta_color": expositores_delta_color,
+            },
+            {
+                "label": "To Dentro",
+                "value": f"{len(to_dentro)}",
+                "delta": to_dentro_delta,
+                "delta_color": to_dentro_delta_color,
+            },
+            {
+                "label": "Contratos Enviados",
+                "value": f"{len(contratos_enviados)}",
+                "delta": contratos_enviados_delta,
+                "delta_color": contratos_enviados_delta_color,
+            },
+            {
+                "label": "Contratos Assinados",
+                "value": f"{contratos_assinados}",
+                "delta": contratos_assinados_delta,
+                "delta_color": contratos_assinados_delta_color,
+            },
             {
                 "label": "Taxa de Conversão",
                 "value": f"{taxa_conversao:.1f}%",
+                "delta": taxa_conversao_delta,
+                "delta_color": taxa_conversao_delta_color,
                 "help": "Contratos assinados / Total de Leads",
             },
         ]
@@ -229,21 +332,68 @@ with tab_comercial:
 #  ABA 2 — RECEITA & METAS
 # ════════════════════════════════════════════════════════════════
 with tab_receita:
-    section_header("💵", "Receita & Metas", f"Evento: {evento_selecionado}")
+    section_header(
+        "💵",
+        "Receita & Metas",
+        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+    )
 
     receita_total = vendidos["valor_contrato"].astype(float).sum()
+    receita_total_prev = vendidos_before_current["valor_contrato"].astype(float).sum()
+
     receita_prevista_total = vendidos["receita_prevista_unidade"].sum()
+    receita_prevista_total_prev = vendidos_before_current["receita_prevista_unidade"].sum()
+
     faltante_valor = max(meta_evento - receita_total, 0)
+    faltante_valor_prev = max(meta_evento - receita_total_prev, 0)
     faltante_pct = (faltante_valor / meta_evento * 100) if meta_evento else 0
+    faltante_pct_prev = (faltante_valor_prev / meta_evento * 100) if meta_evento else 0
+
+    receita_total_delta, receita_total_delta_color = format_delta(
+        receita_total,
+        receita_total_prev,
+        higher_is_better=True,
+        format_str="{:+,.0f}",
+    )
+    receita_prevista_delta, receita_prevista_delta_color = format_delta(
+        receita_prevista_total,
+        receita_prevista_total_prev,
+        higher_is_better=True,
+        format_str="{:+,.0f}",
+    )
+    faltante_delta, faltante_delta_color = format_delta(
+        faltante_valor,
+        faltante_valor_prev,
+        higher_is_better=False,
+        format_str="{:+,.0f}",
+    )
+    faltante_pct_delta, faltante_pct_delta_color = format_delta(
+        faltante_pct,
+        faltante_pct_prev,
+        higher_is_better=False,
+        format_str="{:+.1f}%",
+    )
 
     kpi_row(
         [
-            {"label": "Receita Total", "value": f"R$ {receita_total:,.0f}"},
+            {
+                "label": "Receita Total",
+                "value": f"R$ {receita_total:,.0f}",
+                "delta": f"R$ {receita_total_delta}",
+                "delta_color": receita_total_delta_color,
+            },
             {"label": "Meta", "value": f"R$ {meta_evento:,.0f}"},
-            {"label": "Faltante p/ Meta", "value": f"R$ {faltante_valor:,.0f}"},
+            {
+                "label": "Faltante p/ Meta",
+                "value": f"R$ {faltante_valor:,.0f}",
+                "delta": f"R$ {faltante_delta}",
+                "delta_color": faltante_delta_color,
+            },
             {
                 "label": "% Faltante",
                 "value": f"{faltante_pct:.1f}%",
+                "delta": faltante_pct_delta,
+                "delta_color": faltante_pct_delta_color,
                 "help": "Percentual da meta que ainda falta atingir",
             },
         ]
@@ -337,25 +487,70 @@ with tab_receita:
 #  ABA 3 — POLÍTICA DE DESCONTOS
 # ════════════════════════════════════════════════════════════════
 with tab_descontos:
-    section_header("🏷️", "Política de Descontos", f"Evento: {evento_selecionado}")
+    section_header(
+        "🏷️",
+        "Política de Descontos",
+        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+    )
 
     descontos_positivos = vendidos[vendidos["desconto_unidade"] > 0]
+    descontos_positivos_prev = vendidos_before_current[vendidos_before_current["desconto_unidade"] > 0]
 
     desconto_total = descontos_positivos["desconto_unidade"].sum()
+    desconto_total_prev = descontos_positivos_prev["desconto_unidade"].sum()
+
     desconto_medio = descontos_positivos["desconto_unidade"].mean() if len(descontos_positivos) else 0
+    desconto_medio_prev = descontos_positivos_prev["desconto_unidade"].mean() if len(descontos_positivos_prev) else 0
+
     pct_desconto_medio = (
         (descontos_positivos["desconto_unidade"] / descontos_positivos["receita_prevista_unidade"]).mean() * 100
         if len(descontos_positivos)
         else 0
     )
+    pct_desconto_medio_prev = (
+        (descontos_positivos_prev["desconto_unidade"] / descontos_positivos_prev["receita_prevista_unidade"]).mean() * 100
+        if len(descontos_positivos_prev)
+        else 0
+    )
+
+    desconto_total_delta, desconto_total_delta_color = format_delta(
+        desconto_total,
+        desconto_total_prev,
+        higher_is_better=False,
+        format_str="{:+,.0f}",
+    )
+    desconto_medio_delta, desconto_medio_delta_color = format_delta(
+        desconto_medio,
+        desconto_medio_prev,
+        higher_is_better=False,
+        format_str="{:+,.0f}",
+    )
+    pct_desconto_medio_delta, pct_desconto_medio_delta_color = format_delta(
+        pct_desconto_medio,
+        pct_desconto_medio_prev,
+        higher_is_better=False,
+        format_str="{:+.1f}%",
+    )
 
     kpi_row(
         [
-            {"label": "Desconto Total", "value": f"R$ {desconto_total:,.0f}"},
-            {"label": "Desconto Médio", "value": f"R$ {desconto_medio:,.0f}"},
+            {
+                "label": "Desconto Total",
+                "value": f"R$ {desconto_total:,.0f}",
+                "delta": f"R$ {desconto_total_delta}",
+                "delta_color": desconto_total_delta_color,
+            },
+            {
+                "label": "Desconto Médio",
+                "value": f"R$ {desconto_medio:,.0f}",
+                "delta": f"R$ {desconto_medio_delta}",
+                "delta_color": desconto_medio_delta_color,
+            },
             {
                 "label": "% Desconto Médio",
                 "value": f"{pct_desconto_medio:.1f}%",
+                "delta": pct_desconto_medio_delta,
+                "delta_color": pct_desconto_medio_delta_color,
                 "help": "Média do desconto concedido sobre o valor previsto pela tabela de m²",
             },
         ]
@@ -424,26 +619,92 @@ with tab_descontos:
 #  ABA 4 — ESPAÇO & ABL
 # ════════════════════════════════════════════════════════════════
 with tab_espaco:
-    section_header("📐", "Espaço & ABL", f"Evento: {evento_selecionado}")
+    section_header(
+        "📐",
+        "Espaço & ABL",
+        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+    )
 
     abl_total = ABL_TOTAL.get(evento_selecionado, vendidos["area_m2"].astype(float).sum())
 
     area_preenchida = vendidos["area_m2"].astype(float).sum()
+    area_preenchida_prev = vendidos_before_current["area_m2"].astype(float).sum()
+
     area_disponivel = max(abl_total - area_preenchida, 0)
+    area_disponivel_prev = max(abl_total - area_preenchida_prev, 0)
+
     taxa_ocupacao = (area_preenchida / abl_total * 100) if abl_total else 0
+    taxa_ocupacao_prev = (area_preenchida_prev / abl_total * 100) if abl_total else 0
+
     receita_por_m2 = (receita_total / area_preenchida) if area_preenchida else 0
+    receita_por_m2_prev = (receita_total_prev / area_preenchida_prev) if area_preenchida_prev else 0
+
     receita_potencial_vaga = receita_por_m2 * area_disponivel
+    receita_potencial_vaga_prev = receita_por_m2_prev * area_disponivel_prev
+
+    area_preenchida_delta, area_preenchida_delta_color = format_delta(
+        area_preenchida,
+        area_preenchida_prev,
+        higher_is_better=True,
+        format_str="{:+,.0f}",
+    )
+    taxa_ocupacao_delta, taxa_ocupacao_delta_color = format_delta(
+        taxa_ocupacao,
+        taxa_ocupacao_prev,
+        higher_is_better=True,
+        format_str="{:+.1f}%",
+    )
+    receita_por_m2_delta, receita_por_m2_delta_color = format_delta(
+        receita_por_m2,
+        receita_por_m2_prev,
+        higher_is_better=True,
+        format_str="{:+,.0f}",
+    )
+    area_disponivel_delta, area_disponivel_delta_color = format_delta(
+        area_disponivel,
+        area_disponivel_prev,
+        higher_is_better=False,
+        format_str="{:+,.0f}",
+    )
+    receita_potencial_vaga_delta, receita_potencial_vaga_delta_color = format_delta(
+        receita_potencial_vaga,
+        receita_potencial_vaga_prev,
+        higher_is_better=False,
+        format_str="{:+,.0f}",
+    )
 
     kpi_row(
         [
             {"label": "ABL Total", "value": f"{abl_total:,.0f} m²"},
-            {"label": "Área Preenchida", "value": f"{area_preenchida:,.0f} m²"},
-            {"label": "Taxa de Ocupação", "value": f"{taxa_ocupacao:.1f}%"},
-            {"label": "Receita/m²", "value": f"R$ {receita_por_m2:,.0f}"},
-            {"label": "Área Disponível", "value": f"{area_disponivel:,.0f} m²"},
+            {
+                "label": "Área Preenchida",
+                "value": f"{area_preenchida:,.0f} m²",
+                "delta": f"{area_preenchida_delta} m²",
+                "delta_color": area_preenchida_delta_color,
+            },
+            {
+                "label": "Taxa de Ocupação",
+                "value": f"{taxa_ocupacao:.1f}%",
+                "delta": taxa_ocupacao_delta,
+                "delta_color": taxa_ocupacao_delta_color,
+            },
+            {
+                "label": "Receita/m²",
+                "value": f"R$ {receita_por_m2:,.0f}",
+                "delta": f"R$ {receita_por_m2_delta}",
+                "delta_color": receita_por_m2_delta_color,
+            },
+            {
+                "label": "Área Disponível",
+                "value": f"{area_disponivel:,.0f} m²",
+                "delta": f"{area_disponivel_delta} m²",
+                "delta_color": area_disponivel_delta_color,
+            },
             {
                 "label": "Receita Potencial Vaga",
                 "value": f"R$ {receita_potencial_vaga:,.0f}",
+                "delta": f"R$ {receita_potencial_vaga_delta}",
+                "delta_color": receita_potencial_vaga_delta_color,
                 "help": "Receita/m² operado × área ainda disponível",
             },
         ]
@@ -485,12 +746,12 @@ with tab_espaco:
         st.plotly_chart(fig_scatter, use_container_width=True)
 
     st.write("")
-    if "bloco" in vendidos.columns and "etapa" in vendidos.columns:
+    if "bloco_pavilhao" in vendidos.columns and "etapa" in vendidos.columns:
         heatmap_df = (
-            vendidos.groupby(["etapa", "bloco"])["area_m2"]
+            vendidos.groupby(["etapa", "bloco_pavilhao"])["area_m2"]
             .sum()
             .reset_index()
-            .pivot(index="etapa", columns="bloco", values="area_m2")
+            .pivot(index="etapa", columns="bloco_pavilhao", values="area_m2")
             .fillna(0)
         )
         fig_heatmap = px.imshow(
@@ -501,6 +762,77 @@ with tab_espaco:
         )
         fig_heatmap.update_layout(**plotly_layout(title="Ocupação por Etapa × Bloco", height=340))
         st.plotly_chart(fig_heatmap, use_container_width=True)
+ 
+    st.write("")
+    st.markdown("**Distribuição por Rua/Pavilhão**")
+ 
+    agg_bloco = (
+        vendidos.groupby("bloco_pavilhao")
+        .agg(
+            qtd_stands=("estande_unidade", "nunique"),
+            area_total=("area_m2", "sum"),
+            receita_total=("valor_contrato", "sum"),
+        )
+        .reset_index()
+    )
+    agg_bloco["receita_por_m2"] = agg_bloco["receita_total"] / agg_bloco["area_total"]
+ 
+    fig_bloco = make_subplots(
+        rows=2,
+        cols=2,
+        subplot_titles=(
+            "Qtd. de Stands",
+            "Área Total (m²)",
+            "Receita Total (R$)",
+            "Receita por m² (R$)",
+        ),
+        horizontal_spacing=0.15,
+        vertical_spacing=0.22,
+    )
+ 
+    metricas_bloco = [
+        ("qtd_stands", 1, 1, CHART_PALETTE[0]),
+        ("area_total", 1, 2, CHART_PALETTE[1]),
+        ("receita_total", 2, 1, CHART_PALETTE[2]),
+        ("receita_por_m2", 2, 2, CHART_PALETTE[3]),
+    ]
+ 
+    for coluna, row, col, cor in metricas_bloco:
+        ordenado = agg_bloco.sort_values(coluna, ascending=True)
+        fig_bloco.add_trace(
+            go.Bar(
+                x=ordenado[coluna],
+                y=ordenado["bloco_pavilhao"],
+                orientation="h",
+                marker_color=cor,
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+ 
+    layout_base_bloco = plotly_layout(height=540)
+    layout_base_bloco.pop("xaxis", None)
+    layout_base_bloco.pop("yaxis", None)
+    fig_bloco.update_layout(**layout_base_bloco)
+    fig_bloco.update_xaxes(gridcolor=COLORS["grid"], zeroline=False, linecolor=COLORS["border"])
+    fig_bloco.update_yaxes(gridcolor=COLORS["grid"], zeroline=False, linecolor=COLORS["border"])
+    st.plotly_chart(fig_bloco, use_container_width=True)
+ 
+    with st.expander("Ver tabela detalhada por rua/pavilhão"):
+        tabela_bloco = (
+            agg_bloco.rename(
+                columns={
+                    "bloco_pavilhao": "Rua/Pavilhão",
+                    "qtd_stands": "Qtd. Stands",
+                    "area_total": "Área Total (m²)",
+                    "receita_total": "Receita Total (R$)",
+                    "receita_por_m2": "Receita/m² (R$)",
+                }
+            )
+            .sort_values("Receita Total (R$)", ascending=False)
+        )
+        st.dataframe(tabela_bloco, hide_index=True, use_container_width=True)
 
     diario_area = (
         vendidos.groupby(vendidos["data_venda"].dt.date)["area_m2"]

@@ -216,6 +216,45 @@ def kpi_row(kpis: list[dict]) -> None:
             )
 
 
+def format_delta(
+    current: float,
+    previous: float,
+    higher_is_better: bool = True,
+    abs_format: str = "{:+,.0f}",
+    rel_format: str = "{:+.1f}%",
+    suffix: str = "",
+    format_str: str | None = None,
+    relative_to_current: bool = True,
+) -> tuple[str, str]:
+    """Formata delta para st.metric com cor e percentual de variação.
+
+    Args:
+        current: valor do período atual.
+        previous: valor do período anterior.
+        higher_is_better: se True, um delta positivo é bom.
+        abs_format: formato do delta absoluto.
+        rel_format: formato do delta percentual.
+        suffix: sufixo opcional para o valor absoluto (por exemplo, ' pp' ou ' m²').
+        relative_to_current: se True, calcula a porcentagem em relação ao valor atual.
+
+    Returns:
+        tuple[str, str]: delta formatado e delta_color para st.metric.
+    """
+    delta = current - previous
+    if format_str is not None:
+        abs_format = format_str
+
+    denominator = current if relative_to_current else previous
+    if denominator:
+        relative_change = delta / denominator * 100
+    else:
+        relative_change = 100.0 if delta > 0 else 0.0
+
+    delta_color = "normal" if (delta >= 0) == higher_is_better else "inverse"
+    delta_text = f"{abs_format.format(delta)}{suffix} ({rel_format.format(relative_change)})"
+    return delta_text, delta_color
+
+
 def plotly_layout(title: str | None = None, height: int = 380) -> dict:
     """Retorna um dict de layout pronto para fig.update_layout(**plotly_layout(...))."""
     layout = dict(
