@@ -7,13 +7,6 @@ from pathlib import Path
 from geo_utils import geocodificar, obter_centro_estado
 from plotly.subplots import make_subplots
 from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO
-
-project_root = Path(__file__).resolve().parents[1]
-dash_dir = Path(__file__).resolve().parent
-for path in (str(project_root), str(dash_dir)):
-    if path not in sys.path:
-        sys.path.insert(0, path)
-
 from theme import (
     PAGE_CONFIG,
     COLORS,
@@ -25,6 +18,13 @@ from theme import (
     donut_layout,
     format_delta,
 )
+
+project_root = Path(__file__).resolve().parents[1]
+dash_dir = Path(__file__).resolve().parent
+for path in (str(project_root), str(dash_dir)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 
 from app.database import DatabaseManager
 from app.main import PipelineController, url, headers
