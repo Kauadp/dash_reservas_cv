@@ -64,7 +64,7 @@ if st.sidebar.button("🔄 Atualizar Base de Dados"):
 #  SELEÇÃO DE EVENTO
 # ──────────────────────────────────────────────────────────────────
 eventos_disponiveis = sorted(
-    set(df_reservas_all["imobiliaria_nome"].dropna().unique()) & set(METAS.keys())
+    set(df_reservas_all["empreendimento"].dropna().unique()) & set(METAS.keys())
 )
 
 if not eventos_disponiveis:
@@ -94,7 +94,7 @@ if event_date is not None:
 else:
     event_date_info = "Data do evento não informada"
 
-df = df_reservas_all[df_reservas_all["imobiliaria_nome"] == evento_selecionado].copy()
+df = df_reservas_all[df_reservas_all["empreendimento"] == evento_selecionado].copy()
 
 df["receita_prevista_unidade"] = df["area_m2"].astype(float) * valor_m2_evento
 df["desconto_unidade"] = df["receita_prevista_unidade"] - df["valor_contrato"].astype(float)
