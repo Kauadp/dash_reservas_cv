@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from geo_utils import geocodificar, obter_centro_estado
 from plotly.subplots import make_subplots
-from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO
+from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO, EVENT_DATE
 from theme import (
     PAGE_CONFIG,
     COLORS,
@@ -79,6 +79,21 @@ evento_selecionado = st.sidebar.selectbox("📅 Evento", eventos_disponiveis)
 meta_evento = METAS[evento_selecionado]
 valor_m2_evento = TABELA_METRO[evento_selecionado]
 
+raw_event_date = EVENT_DATE.get(evento_selecionado)
+event_date = pd.to_datetime(raw_event_date) if raw_event_date else None
+if event_date is not None:
+    today = pd.Timestamp.now().normalize()
+    if event_date < today:
+        event_date = event_date + pd.DateOffset(years=1)
+    days_to_event = (event_date - today).days
+    event_date_info = (
+        f"{event_date.strftime('%d/%m/%Y')} · Faltam {days_to_event} dias"
+        if days_to_event > 0
+        else f"{event_date.strftime('%d/%m/%Y')} · Hoje"
+    )
+else:
+    event_date_info = "Data do evento não informada"
+
 df = df_reservas_all[df_reservas_all["imobiliaria_nome"] == evento_selecionado].copy()
 
 df["receita_prevista_unidade"] = df["area_m2"].astype(float) * valor_m2_evento
@@ -139,7 +154,7 @@ with tab_comercial:
     section_header(
         "🤝",
         "Comercial & Funil",
-        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+        f"Evento: {evento_selecionado} · {event_date_info} · Comparação: {janela_label}",
     )
 
     expositores_totais = df["titular_nome"].nunique()
@@ -335,7 +350,7 @@ with tab_receita:
     section_header(
         "💵",
         "Receita & Metas",
-        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+        f"Evento: {evento_selecionado} · {event_date_info} · Comparação: {janela_label}",
     )
 
     receita_total = vendidos["valor_contrato"].astype(float).sum()
@@ -490,7 +505,7 @@ with tab_descontos:
     section_header(
         "🏷️",
         "Política de Descontos",
-        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+        f"Evento: {evento_selecionado} · {event_date_info} · Comparação: {janela_label}",
     )
 
     descontos_positivos = vendidos[vendidos["desconto_unidade"] > 0]
@@ -622,7 +637,7 @@ with tab_espaco:
     section_header(
         "📐",
         "Espaço & ABL",
-        f"Evento: {evento_selecionado} · Comparação: {janela_label}",
+        f"Evento: {evento_selecionado} · {event_date_info} · Comparação: {janela_label}",
     )
 
     abl_total = ABL_TOTAL.get(evento_selecionado, vendidos["area_m2"].astype(float).sum())
