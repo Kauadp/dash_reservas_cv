@@ -11,6 +11,7 @@ import unicodedata
 
 import pandas as pd
 import streamlit as st
+import math
 
 URL_MUNICIPIOS = "https://raw.githubusercontent.com/kelvins/Municipios-Brasileiros/main/csv/municipios.csv"
 URL_ESTADOS = "https://raw.githubusercontent.com/kelvins/Municipios-Brasileiros/main/csv/estados.csv"
@@ -61,6 +62,20 @@ def obter_centro_estado(uf: str) -> dict | None:
         return None
     row = match.iloc[0]
     return {"lat": row["latitude"], "lon": row["longitude"]}
+
+
+def calcular_distancia_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distância entre dois pontos em quilômetros usando a fórmula de Haversine."""
+    if pd.isna(lat1) or pd.isna(lon1) or pd.isna(lat2) or pd.isna(lon2):
+        return float("nan")
+    raio = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return raio * c
 
 
 def geocodificar(df: pd.DataFrame, col_cidade: str, col_estado: str | None = None) -> pd.DataFrame:

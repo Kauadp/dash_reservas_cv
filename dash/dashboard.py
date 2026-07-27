@@ -4,9 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys
 from pathlib import Path
-from geo_utils import geocodificar, obter_centro_estado
+from geo_utils import geocodificar, obter_centro_estado, calcular_distancia_km
 from plotly.subplots import make_subplots
-from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO, EVENT_DATE
+from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO, EVENT_DATE, EVENT_CITY
 from theme import (
     PAGE_CONFIG,
     COLORS,
@@ -102,6 +102,29 @@ df["desconto_unidade"] = df["receita_prevista_unidade"] - df["valor_contrato"].a
 vendidos = df[(df["situacao"] == "Contrato Assinado") | 
               (df["situacao"] == "Vendida")].copy()
 
+
+# Geocodificação do ponto do evento para calcular distância média
+event_city, event_state = EVENT_CITY.get(evento_selecionado, (None, None))
+event_location = None
+if event_city and event_state:
+    event_point = pd.DataFrame(
+        {"titular_cidade": [event_city], "titular_estado": [event_state]}
+    )
+    event_geo = geocodificar(event_point, "titular_cidade", "titular_estado").iloc[0]
+    if pd.notna(event_geo["latitude"]) and pd.notna(event_geo["longitude"]):
+        event_location = (event_geo["latitude"], event_geo["longitude"])
+
+
+df_geo = geocodificar(df, "titular_cidade", "titular_estado")
+if event_location is not None:
+    df_geo["distancia_evento_km"] = df_geo.apply(
+        lambda row: calcular_distancia_km(
+            row["latitude"], row["longitude"], event_location[0], event_location[1]
+        ),
+        axis=1,
+    )
+else:
+    df_geo["distancia_evento_km"] = float("nan")
 
 JANELAS_COMPARACAO = {
     "Dia anterior (D-1)": 1,
@@ -258,7 +281,6 @@ with tab_comercial:
         fig_funil.update_layout(**plotly_layout(title="Funil por Situação"))
         st.plotly_chart(fig_funil, use_container_width=True)
 
-    df_geo = geocodificar(df, "titular_cidade", "titular_estado")
     geo_counts = (
         df_geo.dropna(subset=["latitude", "longitude"])
         .groupby(["cidade_norm", "latitude", "longitude"])
@@ -266,6 +288,7 @@ with tab_comercial:
         .reset_index(name="quantidade")
     )
     cidades_nao_localizadas = df_geo["titular_cidade"].notna().sum() - geo_counts["quantidade"].sum()
+    median_distance_km = df_geo["distancia_evento_km"].dropna().median()
 
     if geo_counts.empty:
         st.info("Nenhuma cidade de `titular_cidade` foi reconhecida na base de municípios pra montar o mapa.")
@@ -280,24 +303,33 @@ with tab_comercial:
         else:
             centro, zoom = dict(lat=-14.2, lon=-51.9), 3
     with col_map:
-    
-            fig_mapa = px.density_map(
-                geo_counts,
-                lat="latitude",
-                lon="longitude",
-                z="quantidade",
-                radius=28,
-                center=centro,
-                zoom=zoom,
-                map_style="open-street-map",
-                color_continuous_scale=[COLORS["background"], COLORS["accent"], COLORS["primary"]],
-                hover_name="cidade_norm",
+        fig_mapa = px.density_map(
+            geo_counts,
+            lat="latitude",
+            lon="longitude",
+            z="quantidade",
+            radius=28,
+            center=centro,
+            zoom=zoom,
+            map_style="open-street-map",
+            color_continuous_scale=[COLORS["background"], COLORS["accent"], COLORS["primary"]],
+            hover_name="cidade_norm",
+        )
+        fig_mapa.update_layout(**plotly_layout(title="Concentração de Expositores por Cidade", height=440))
+        fig_mapa.update_layout(margin=dict(l=0, r=0, t=50, b=0))
+        st.plotly_chart(fig_mapa, use_container_width=True)
+
+        if pd.notna(median_distance_km):
+            st.metric(
+                label="Distância mediana até o evento",
+                value=f"{median_distance_km:,.0f} km",
+                help="Mediana da distância geográfica entre expositores e a cidade do evento.",
             )
-            fig_mapa.update_layout(**plotly_layout(title="Concentração de Expositores por Cidade", height=440))
-            fig_mapa.update_layout(margin=dict(l=0, r=0, t=50, b=0))
-            st.plotly_chart(fig_mapa, use_container_width=True)
-            if cidades_nao_localizadas > 0:
-                st.caption(
+            if event_location is not None:
+                st.caption(f"Local do evento: {event_city}, {event_state}")
+
+        if cidades_nao_localizadas > 0:
+            st.caption(
                     f"⚠️ {int(cidades_nao_localizadas)} registro(s) com cidade não reconhecida na base do IBGE "
                     "não aparecem no mapa (nome digitado fora do padrão, cidade estrangeira, ou em branco)."
                 )

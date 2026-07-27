@@ -27,3 +27,15 @@ EVENT_DATE = {
     "EXAGERADO ES": "2026-10-13",
     "EXAGERADO RIO": "2026-12-09",
 }
+
+EVENT_CITY = {
+    "EXAGERADO SP": ("São Paulo", "SP"),
+    "EXAGERADO RIO": ("Rio de Janeiro", "RJ"),
+    "EXAGERADO ES": ("Serra", "ES"),
+}
+
+EVENT_DATE = {
+    "EXAGERADO SP": "2026-09-23",
+    "EXAGERADO ES": "2026-10-13",
+    "EXAGERADO RIO": "2026-12-09",
+}
