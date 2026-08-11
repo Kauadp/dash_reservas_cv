@@ -1,41 +1,41 @@
 METAS = {
-    "EXG OUT - MEU EXG": 2500000,
+    "EXG ES OUT 2026 - MEU EXG": 2500000,
     "EXG RJ DEZ 2026 - MEU EXG": 1500000,
     "EXG SP SET 2026 - MEU EXG": 1500000
 }
 
 TABELA_METRO = {
-    "EXG OUT - MEU EXG": 560,
+    "EXG ES OUT 2026 - MEU EXG": 560,
     "EXG RJ DEZ 2026 - MEU EXG": 790,
     "EXG SP SET 2026 - MEU EXG": 790
 }
 
 ABL_TOTAL = {
-    "EXG OUT - MEU EXG": 4587,
+    "EXG ES OUT 2026 - MEU EXG": 4587,
     "EXG RJ DEZ 2026 - MEU EXG": 2950,
     "EXG SP SET 2026 - MEU EXG": 3926
 }
 
 ESTADO_EVENTO = {
-    "EXG OUT - MEU EXG": "ES",
+    "EXG ES OUT 2026 - MEU EXG": "ES",
     "EXG RJ DEZ 2026 - MEU EXG": "RJ",
     "EXG SP SET 2026 - MEU EXG": "SP"
 }
 
 EVENT_DATE = {
     "EXG SP SET 2026 - MEU EXG": "2026-09-23",
-    "EXG OUT - MEU EXG": "2026-10-13",
+    "EXG ES OUT 2026 - MEU EXG": "2026-10-13",
     "EXG RJ DEZ 2026 - MEU EXG": "2026-12-09",
 }
 
 EVENT_CITY = {
     "EXG SP SET 2026 - MEU EXG": ("São Paulo", "SP"),
     "EXG RJ DEZ 2026 - MEU EXG": ("Rio de Janeiro", "RJ"),
-    "EXG OUT - MEU EXG": ("Serra", "ES"),
+    "EXG ES OUT 2026 - MEU EXG": ("Serra", "ES"),
 }
 
 EVENT_DATE = {
     "EXG SP SET 2026 - MEU EXG": "2026-09-23",
-    "EXG OUT - MEU EXG": "2026-10-13",
+    "EXG ES OUT 2026 - MEU EXG": "2026-10-13",
     "EXG RJ DEZ 2026 - MEU EXG": "2026-12-09",
 }
