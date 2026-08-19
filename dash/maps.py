@@ -5,9 +5,15 @@ METAS = {
 }
 
 TABELA_METRO = {
-    "EXG ES OUT 2026 - MEU EXG": 560,
+    "EXG ES OUT 2026 - MEU EXG": 552,
     "EXG RJ DEZ 2026 - MEU EXG": 790,
     "EXG SP SET 2026 - MEU EXG": 790
+}
+
+TABELA_PRECOS_ES = {
+    "RUA C": 619.9,
+    "RUA J": 719.9,
+    "QUIOSQUE": 1007.4
 }
 
 ABL_TOTAL = {

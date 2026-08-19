@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from geo_utils import geocodificar, obter_centro_estado, calcular_distancia_km
 from plotly.subplots import make_subplots
-from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO, EVENT_DATE, EVENT_CITY
+from maps import METAS, TABELA_METRO, ABL_TOTAL, ESTADO_EVENTO, EVENT_DATE, EVENT_CITY, TABELA_PRECOS_ES
 from theme import (
     PAGE_CONFIG,
     COLORS,
@@ -96,7 +96,16 @@ else:
 
 df = df_reservas_all[df_reservas_all["empreendimento"] == evento_selecionado].copy()
 
-df["receita_prevista_unidade"] = df["area_m2"].astype(float) * valor_m2_evento
+df["preco_m2_tabela"] = valor_m2_evento
+
+if evento_selecionado == "EXG ES OUT 2026 - MEU EXG":
+    df["preco_m2_tabela"] = (
+        df["bloco_pavilhao"]
+        .map(TABELA_PRECOS_ES)
+        .fillna(valor_m2_evento)
+    )
+
+df["receita_prevista_unidade"] = df["area_m2"].astype(float) * df["preco_m2_tabela"]
 df["desconto_unidade"] = df["receita_prevista_unidade"] - df["valor_contrato"].astype(float)
 
 vendidos = df[(df["situacao"] == "Contrato Assinado") | 
@@ -541,24 +550,56 @@ with tab_descontos:
     )
 
     descontos_positivos = vendidos[vendidos["desconto_unidade"] > 0]
-    descontos_positivos_prev = vendidos_before_current[vendidos_before_current["desconto_unidade"] > 0]
+    descontos_positivos_prev = vendidos_before_current[
+        vendidos_before_current["desconto_unidade"] > 0
+    ]
+
+    acima_tabela = vendidos[vendidos["desconto_unidade"] < 0].copy()
+    acima_tabela_prev = vendidos_before_current[
+        vendidos_before_current["desconto_unidade"] < 0
+    ].copy()
 
     desconto_total = descontos_positivos["desconto_unidade"].sum()
     desconto_total_prev = descontos_positivos_prev["desconto_unidade"].sum()
 
-    desconto_medio = descontos_positivos["desconto_unidade"].mean() if len(descontos_positivos) else 0
-    desconto_medio_prev = descontos_positivos_prev["desconto_unidade"].mean() if len(descontos_positivos_prev) else 0
+    desconto_medio = (
+        descontos_positivos["desconto_unidade"].mean()
+        if len(descontos_positivos)
+        else 0
+    )
+    desconto_medio_prev = (
+        descontos_positivos_prev["desconto_unidade"].mean()
+        if len(descontos_positivos_prev)
+        else 0
+    )
 
     pct_desconto_medio = (
-        (descontos_positivos["desconto_unidade"] / descontos_positivos["receita_prevista_unidade"]).mean() * 100
+        (
+            descontos_positivos["desconto_unidade"]
+            / descontos_positivos["receita_prevista_unidade"]
+        ).mean()
+        * 100
         if len(descontos_positivos)
         else 0
     )
     pct_desconto_medio_prev = (
-        (descontos_positivos_prev["desconto_unidade"] / descontos_positivos_prev["receita_prevista_unidade"]).mean() * 100
+        (
+            descontos_positivos_prev["desconto_unidade"]
+            / descontos_positivos_prev["receita_prevista_unidade"]
+        ).mean()
+        * 100
         if len(descontos_positivos_prev)
         else 0
     )
+
+    acima_tabela["acrescimo_unidade"] = -acima_tabela["desconto_unidade"]
+    acima_tabela_prev["acrescimo_unidade"] = -acima_tabela_prev["desconto_unidade"]
+
+    acrescimo_total = acima_tabela["acrescimo_unidade"].sum()
+    acrescimo_total_prev = acima_tabela_prev["acrescimo_unidade"].sum()
+
+    qtd_acima_tabela = len(acima_tabela)
+    qtd_acima_tabela_prev = len(acima_tabela_prev)
 
     desconto_total_delta, desconto_total_delta_color = format_delta(
         desconto_total,
@@ -578,6 +619,18 @@ with tab_descontos:
         higher_is_better=False,
         format_str="{:+.1f}%",
     )
+    acrescimo_total_delta, acrescimo_total_delta_color = format_delta(
+        acrescimo_total,
+        acrescimo_total_prev,
+        higher_is_better=True,
+        format_str="{:+,.0f}",
+    )
+    qtd_acima_delta, qtd_acima_delta_color = format_delta(
+        qtd_acima_tabela,
+        qtd_acima_tabela_prev,
+        higher_is_better=True,
+        abs_format="{:+,.0f}",
+    )
 
     kpi_row(
         [
@@ -586,6 +639,7 @@ with tab_descontos:
                 "value": f"R$ {desconto_total:,.0f}",
                 "delta": f"R$ {desconto_total_delta}",
                 "delta_color": desconto_total_delta_color,
+                "help": "Soma dos contratos abaixo do preço de tabela.",
             },
             {
                 "label": "Desconto Médio",
@@ -598,19 +652,39 @@ with tab_descontos:
                 "value": f"{pct_desconto_medio:.1f}%",
                 "delta": pct_desconto_medio_delta,
                 "delta_color": pct_desconto_medio_delta_color,
-                "help": "Média do desconto concedido sobre o valor previsto pela tabela de m²",
+            },
+            {
+                "label": "Acima da Tabela",
+                "value": f"R$ {acrescimo_total:,.0f}",
+                "delta": f"R$ {acrescimo_total_delta}",
+                "delta_color": acrescimo_total_delta_color,
+                "help": "Acréscimo obtido em contratos acima do preço de tabela.",
+            },
+            {
+                "label": "Contratos Acima da Tabela",
+                "value": f"{qtd_acima_tabela}",
+                "delta": qtd_acima_delta,
+                "delta_color": qtd_acima_delta_color,
             },
         ]
     )
 
+    st.caption(
+        "Desconto Total considera apenas contratos abaixo da tabela. "
+        "Acima da Tabela representa negociações com valor superior ao preço tabelado."
+    )
+
     st.write("")
     diario_desconto = (
-        descontos_positivos.groupby(descontos_positivos["data_venda"].dt.date)["desconto_unidade"]
+        descontos_positivos.groupby(
+            descontos_positivos["data_venda"].dt.date
+        )["desconto_unidade"]
         .sum()
         .reset_index()
         .rename(columns={"data_venda": "data", "desconto_unidade": "desconto"})
         .sort_values("data")
     )
+
     fig_desconto = px.line(
         diario_desconto,
         x="data",
@@ -618,8 +692,85 @@ with tab_descontos:
         markers=True,
         color_discrete_sequence=[COLORS["danger"]],
     )
-    fig_desconto.update_layout(**plotly_layout(title="Desconto Concedido por Dia", height=320))
+    fig_desconto.update_layout(
+        **plotly_layout(
+            title="Descontos Concedidos — Contratos Abaixo da Tabela",
+            height=320,
+        )
+    )
     st.plotly_chart(fig_desconto, use_container_width=True)
+
+    st.write("")
+    st.subheader("Negociações acima do preço de tabela")
+
+    if acima_tabela.empty:
+        st.info("Nenhuma negociação acima do preço de tabela foi identificada.")
+    else:
+        tabela_acima = (
+            acima_tabela[
+                [
+                    "titular_nome",
+                    "corretor_nome",
+                    "bloco_pavilhao",
+                    "area_m2",
+                    "receita_prevista_unidade",
+                    "valor_contrato",
+                    "acrescimo_unidade",
+                ]
+            ]
+            .sort_values("acrescimo_unidade", ascending=False)
+            .rename(
+                columns={
+                    "titular_nome": "Expositor",
+                    "corretor_nome": "Executivo",
+                    "bloco_pavilhao": "Rua/Pavilhão",
+                    "area_m2": "Área (m²)",
+                    "receita_prevista_unidade": "Preço Tabela (R$)",
+                    "valor_contrato": "Contrato (R$)",
+                    "acrescimo_unidade": "Acima da Tabela (R$)",
+                }
+            )
+        )
+
+        top10_acima = tabela_acima.head(10).sort_values(
+            "Acima da Tabela (R$)"
+        )
+
+        fig_acima = px.bar(
+            top10_acima,
+            x="Acima da Tabela (R$)",
+            y="Expositor",
+            orientation="h",
+            text="Acima da Tabela (R$)",
+            color_discrete_sequence=[COLORS["success"]],
+        )
+        fig_acima.update_traces(
+            texttemplate="R$ %{text:,.0f}",
+            textposition="outside",
+        )
+        fig_acima.update_layout(
+            **plotly_layout(
+                title="Maiores Acréscimos sobre o Preço de Tabela",
+                height=380,
+            )
+        )
+        fig_acima.update_xaxes(title="Acréscimo (R$)")
+        fig_acima.update_yaxes(title=None)
+
+        st.plotly_chart(fig_acima, use_container_width=True)
+
+        st.dataframe(
+            tabela_acima.style.format(
+                {
+                    "Área (m²)": "{:,.2f}",
+                    "Preço Tabela (R$)": "R$ {:,.2f}",
+                    "Contrato (R$)": "R$ {:,.2f}",
+                    "Acima da Tabela (R$)": "R$ {:,.2f}",
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
 
     st.write("")
     col_desc_corretor, col_desc_top5 = st.columns(2)
@@ -639,14 +790,19 @@ with tab_descontos:
             orientation="h",
             color_discrete_sequence=[COLORS["primary_dark"]],
         )
-        fig_desc_corretor.update_layout(**plotly_layout(title="Desconto Total por Executivo"))
+        fig_desc_corretor.update_layout(
+            **plotly_layout(title="Desconto Total por Executivo")
+        )
         fig_desc_corretor.update_yaxes(autorange="reversed", title=None)
         fig_desc_corretor.update_xaxes(title=None)
         st.plotly_chart(fig_desc_corretor, use_container_width=True)
 
     with col_desc_top5:
         st.markdown("**Top 5 Maiores Descontos Concedidos**")
-        top5_desconto = descontos_positivos.sort_values("desconto_unidade", ascending=False).head(5)
+        top5_desconto = descontos_positivos.sort_values(
+            "desconto_unidade", ascending=False
+        ).head(5)
+
         st.dataframe(
             top5_desconto[
                 ["titular_nome", "corretor_nome", "desconto_unidade"]
@@ -660,6 +816,7 @@ with tab_descontos:
             hide_index=True,
             use_container_width=True,
         )
+
 
 
 # ════════════════════════════════════════════════════════════════
